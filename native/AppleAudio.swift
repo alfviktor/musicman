@@ -115,7 +115,7 @@ private actor Artwork {
         if kitActive { player.stop(); kitActive = false }
         playing = false
     }
-    func play(_ track: Track, prepareOnly: Bool) async throws {
+    func play(_ track: Track, prepareOnly: Bool, startAt: Double) async throws {
         guard !transitioning else { throw PlayerError("Playback is already loading.") }
         transitioning = true; defer { transitioning = false }
         generation += 1
@@ -125,7 +125,7 @@ private actor Artwork {
             catch { if UnavailableTrack.matches(error) { throw UnavailableTrack("Audio file is missing.") }; throw error }
             let q = AudioQuality.file(file); source = q.label; sourceRate = q.hz
             if !prepareOnly { try await match() }
-            try openFile(file, gains: gains, position: 0, audible: !prepareOnly)
+            try openFile(file, gains: gains, position: startAt, audible: !prepareOnly)
 
         } else {
             let authorization = prepareOnly ? MusicAuthorization.currentStatus : await MusicAuthorization.request()
@@ -142,7 +142,9 @@ private actor Artwork {
             if prepareOnly && ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 {
                 if #available(macOS 26.4, *) { player.queue.affectsListeningHistory = false }
             }
-            if prepareOnly {try await player.prepareToPlay()} else {try await match(); try await player.play()}
+            if prepareOnly || startAt > 0 {try await player.prepareToPlay()}
+            if startAt > 0 {player.playbackTime = min(startAt,song.duration ?? startAt)}
+            if !prepareOnly {try await match(); try await player.play()}
         }
         if prepareOnly { info("prepared"); stop(); return }
         playing = true; info("started")
@@ -164,7 +166,7 @@ private actor Artwork {
         if gains.flat {
             let next = try AVAudioPlayer(contentsOf: url)
             guard next.prepareToPlay() else { throw UnavailableTrack("The file could not be prepared.") }
-            next.currentTime = position
+            next.currentTime = min(position,next.duration)
             previousEQ?.pause()
             if audible && !next.play() {
                 if let previousEQ { try previousEQ.resume() }
@@ -217,7 +219,14 @@ private actor Artwork {
     }
     func command(_ method: String, _ bytes: Data) async throws {
         switch method {
-        case "play","prepare": do {try await play(JSONDecoder().decode(Track.self,from:bytes),prepareOnly:method=="prepare")} catch {stop(); info(); throw error}
+        case "play","prepare":
+            struct Start: Decodable {let startAt: Double?}
+            do {
+                let decoder = JSONDecoder()
+                let track = try decoder.decode(Track.self,from:bytes)
+                let offset = try decoder.decode(Start.self,from:bytes).startAt ?? 0
+                try await play(track,prepareOnly:method=="prepare",startAt:max(0,offset))
+            } catch {stop(); info(); throw error}
         case "toggle":
             guard !transitioning else {return}
             if let filtered {

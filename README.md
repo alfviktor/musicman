@@ -17,7 +17,9 @@ The build uses ad hoc signing by default. For personal library access, supply a 
 
 Select a collection or album to see its tracks. Double-click a track to play it. Select one or more tracks for **Play next** or **Add to queue**. The repeat control cycles through off, one song and the entire queue. **Shuffle + loop** shuffles the visible tracks and repeats the queue. **Manage library** also exposes hidden tracks and playlists. Curation edits belong to Musicman and can be reversed.
 
-Use ⌘K to search or enter a command. Examples include `night drive playlist on shuffle loop`, `play next Time by Hans Zimmer`, `repeat one`, and `show queue`. Commands are matched locally. Use ⌘O to open audio files and ⌘I to inspect the signal.
+Musicman opens silently with the last queue, repeat mode, and track position ready. Press Play or Space to resume. Selecting a track explicitly starts it from the beginning. Files opened with ⌘O remain in Opened files on the next launch.
+
+Use ⌘K to search or enter a command. Examples include `night drive playlist on shuffle loop`, `play next Time by Hans Zimmer`, `repeat one`, and `show queue`. Commands are matched locally. Use the arrow keys and Return to choose among matching recordings. Use ⌘O to open audio files and ⌘I to inspect the signal.
 
 Missing files and unavailable recordings are skipped automatically. A looping queue stops quietly when every remaining recording has been tried. Selecting a recording again retries it. Closing the last window or choosing Quit Musicman stops the player.
 
@@ -39,6 +41,6 @@ Musicman reads the local Music library and its Replay playlists. It caches artwo
 
 ## Development
 
-`src/` contains the GPUI interface, command handling, curation and queue. `native/` contains the Apple framework adapter. Run `cargo fmt --check` and `cargo test --release --locked` to check the Rust code. The bundled executable accepts `--check --refresh` to re-index the library and check artwork without playback. Add `--prepare "Song title"` to prepare a matching subscription track silently.
+`src/` contains the GPUI interface, command handling, curation and queue. `native/` contains the Apple framework adapter. Run `cargo fmt --check` and `cargo test --release --locked` to check the Rust code. The bundled executable accepts `--check --refresh` to re-index the library and check artwork without playback. Add `--prepare "Song title"` to prepare a matching subscription track silently, optionally with `--at 60` to check the restored position.
 
 Musicman is licensed under Apache-2.0. See LICENSE-APACHE and NOTICE. Its native interface borrows the brushed keys and inset displays of vintage stereo components and the compact playlist layout of classic desktop players.

@@ -69,6 +69,8 @@ pub struct Workspace {
     pub seek_bounds: std::rc::Rc<std::cell::Cell<Bounds<Pixels>>>,
     pub deck: usize,
     pub choices: Vec<(String, Choice)>,
+    pub choice_row: usize,
+    pub choice_scroll: UniformListScrollHandle,
     pub back: Vec<Page>,
     requested: HashSet<String>,
     pub ready: HashSet<String>,
@@ -96,6 +98,12 @@ impl Workspace {
         .detach();
         let presets = crate::eq::Presets::load();
         let preset_error = presets.as_ref().err().map(|e| e.to_string());
+        cx.on_app_quit(|s, _| {
+            s.checkpoint();
+            async {}
+        })
+        .detach();
+        cx.on_release(|s, _| s.checkpoint()).detach();
         let mut s = Self {
             lib: Library::default(),
             page: Page::Work,
@@ -129,6 +137,8 @@ impl Workspace {
             seek_bounds: Default::default(),
             deck: 0,
             choices: vec![],
+            choice_row: 0,
+            choice_scroll: UniformListScrollHandle::new(),
             back: vec![],
             requested: HashSet::new(),
             ready: HashSet::new(),
@@ -184,7 +194,18 @@ impl Workspace {
                     for t in files {
                         self.lib.add_file(t);
                     }
+                    let files: Vec<_> = self
+                        .lib
+                        .files
+                        .iter()
+                        .map(|&i| &self.lib.data.tracks[i])
+                        .collect();
+                    let saved = save("opened-files.json", &files);
+                    self.lib.rebuild();
                     self.go(Page::Files, cx);
+                    if let Err(e) = saved {
+                        self.message = e.to_string();
+                    }
                 }
             }
             "unavailable" => {
@@ -233,6 +254,7 @@ impl Workspace {
                 self.message = string("message");
             }
             "state" | "started" | "ended" => {
+                let was_playing = self.playing;
                 self.playing = v["playing"].as_bool().unwrap_or(false);
                 self.matching = v["matching"].as_bool().unwrap_or(false);
                 self.position = v["position"].as_f64().unwrap_or(0.);
@@ -244,6 +266,7 @@ impl Workspace {
                 if v["kind"] == "started" {
                     if let Some((mut q, i)) = self.pending.take() {
                         q.position = Some(i);
+                        q.bookmark = None;
                         self.lib.queue = q;
                         self.persist_queue();
                     }
@@ -254,8 +277,12 @@ impl Workspace {
                     }
                     self.request_covers();
                 }
+                if v["kind"] == "state" && was_playing && !self.playing {
+                    self.checkpoint();
+                }
                 if v["kind"] == "ended" {
                     self.ended = true;
+                    self.checkpoint();
                     self.advance(false)
                 }
             }
@@ -317,6 +344,37 @@ impl Workspace {
         self.rebuild();
         self.request_covers();
         cx.notify()
+    }
+    fn checkpoint(&mut self) {
+        let Some(track) = self.current.and_then(|i| self.lib.data.tracks.get(i)) else {
+            return;
+        };
+        if self.pending.is_some()
+            || self
+                .lib
+                .queue
+                .position
+                .and_then(|i| self.lib.queue.ids.get(i))
+                != Some(&track.id)
+        {
+            return;
+        }
+        let duration = if self.duration > 0. {
+            self.duration
+        } else {
+            track.seconds
+        };
+        let point =
+            (!self.ended && self.position > 0. && (duration <= 0. || self.position < duration))
+                .then(|| Bookmark {
+                    id: track.id.clone(),
+                    seconds: self.position,
+                    duration,
+                });
+        if self.lib.queue.bookmark != point {
+            self.lib.queue.bookmark = point;
+            self.persist_queue();
+        }
     }
     fn persist_queue(&mut self) {
         if let Err(e) = save("queue.json", &self.lib.queue) {
@@ -391,10 +449,13 @@ impl Workspace {
         }
     }
     fn start(&mut self, q: Queue, i: usize) {
+        self.start_at(q, i, 0.);
+    }
+    fn start_at(&mut self, q: Queue, requested: usize, offset: f64) {
         if self.pending.is_some() {
             return;
         }
-        let Some(i) = q.playable_from(i, |id| {
+        let Some(i) = q.playable_from(requested, |id| {
             self.lib.ids.contains_key(id)
                 && !self.lib.c.hidden.contains(id)
                 && !self.unavailable.contains(id)
@@ -410,7 +471,11 @@ impl Workspace {
         };
         let idx = self.lib.ids[&q.ids[i]];
         self.message.clear();
-        audio::send("play", json!(self.lib.data.tracks[idx]));
+        let mut request = json!(self.lib.data.tracks[idx]);
+        if i == requested && offset > 0. {
+            request["startAt"] = json!(offset);
+        }
+        audio::send("play", request);
         self.pending = Some((q, i));
     }
     pub fn play_row(&mut self, r: usize) {
@@ -499,7 +564,12 @@ impl Workspace {
                     audio::send("toggle", Value::Null)
                 } else if !self.lib.queue.ids.is_empty() {
                     self.unavailable.clear();
-                    self.start(self.lib.queue.clone(), self.lib.queue.position.unwrap_or(0))
+                    let offset = self.lib.queue.resume_point().map_or(0., |b| b.seconds);
+                    self.start_at(
+                        self.lib.queue.clone(),
+                        self.lib.queue.position.unwrap_or(0),
+                        offset,
+                    )
                 } else if !seq.is_empty() {
                     self.action(Play, cx)
                 }
@@ -519,6 +589,7 @@ impl Workspace {
                             shuffled: true,
                             mode: "All".into(),
                             position: None,
+                            bookmark: None,
                         },
                         0,
                     )
@@ -641,7 +712,10 @@ impl Workspace {
                 self.go(Page::Playlist(p), cx);
                 self.action(Action::Shuffle, cx)
             }
-            Choice::Track(t, n) => self.add(vec![t], n),
+            Choice::Track(t, n) => {
+                self.go(self.page.clone(), cx);
+                self.add(vec![t], n);
+            }
         }
         cx.notify()
     }
@@ -653,6 +727,8 @@ impl Workspace {
     }
     pub fn run(&mut self, cx: &mut Context<Self>) {
         let s = fold(self.query.trim());
+        self.choice_row = 0;
+        self.choice_scroll.scroll_to_item(0, ScrollStrategy::Top);
         self.choices.clear();
         if let Some(name) = s.strip_prefix("save eq ") {
             if self.eq.save_as(name.trim()) {
@@ -712,7 +788,6 @@ impl Workspace {
             self.choices = hits
                 .into_iter()
                 .filter(|&i| !exact || fold(&self.lib.data.tracks[i].title) == title)
-                .take(50)
                 .map(|i| {
                     let t = &self.lib.data.tracks[i];
                     (

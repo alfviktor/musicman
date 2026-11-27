@@ -57,7 +57,14 @@ pub struct Track {
 }
 impl Track {
     pub fn loose(url: &str) -> Self {
-        let name = url.rsplit('/').next().unwrap_or(url).replace("%20", " ");
+        let name = url::Url::parse(url)
+            .ok()
+            .and_then(|u| u.to_file_path().ok())
+            .and_then(|p| {
+                p.file_stem()
+                    .map(|stem| stem.to_string_lossy().into_owned())
+            })
+            .unwrap_or_else(|| url.to_owned());
         Self {
             id: url.into(),
             title: name,
@@ -107,6 +114,12 @@ pub struct Pick {
     pub artist: String,
     pub album: String,
 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Bookmark {
+    pub id: String,
+    pub seconds: f64,
+    pub duration: f64,
+}
 #[derive(Default, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Queue {
@@ -114,8 +127,19 @@ pub struct Queue {
     pub position: Option<usize>,
     pub shuffled: bool,
     pub mode: String,
+    pub bookmark: Option<Bookmark>,
 }
 impl Queue {
+    pub fn resume_point(&self) -> Option<&Bookmark> {
+        let id = self.ids.get(self.position?)?;
+        self.bookmark.as_ref().filter(|b| {
+            &b.id == id
+                && b.seconds.is_finite()
+                && b.seconds > 0.
+                && b.duration.is_finite()
+                && (b.duration == 0. || b.seconds < b.duration)
+        })
+    }
     /// Walk the current order once, including the prefix only when the whole queue loops.
     pub fn playable_from(
         &self,
@@ -280,6 +304,20 @@ impl Library {
             }
             c
         });
+        for t in optional::<Vec<Track>>("opened-files.json")?.unwrap_or_default() {
+            if t.id.starts_with("file://") {
+                s.add_file(t);
+            }
+        }
+        let kept_files: Vec<_> =
+            s.c.included
+                .iter()
+                .filter(|id| id.starts_with("file://") && !s.ids.contains_key(*id))
+                .cloned()
+                .collect();
+        for id in kept_files {
+            s.add_file(Track::loose(&id));
+        }
         s.queue = optional("queue.json")?.unwrap_or_default();
         let old = std::mem::take(&mut s.queue.ids);
         let pos = s.queue.position.take();
@@ -435,6 +473,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn resume_belongs_to_the_current_recording_and_survives_reordering() {
+        let mut q: Queue = serde_json::from_str(r#"{"ids":["a","b"],"position":1}"#).unwrap();
+        assert!(q.resume_point().is_none());
+        q.bookmark = Some(Bookmark {
+            id: "b".into(),
+            seconds: 72.0,
+            duration: 180.0,
+        });
+        q.remove(0);
+        let mut restored: Queue = serde_json::from_slice(&serde_json::to_vec(&q).unwrap()).unwrap();
+        assert_eq!(restored.resume_point().unwrap().seconds, 72.);
+        restored.ids[0] = "c".into();
+        assert!(restored.resume_point().is_none());
+        restored.ids[0] = "b".into();
+        restored.bookmark.as_mut().unwrap().seconds = 180.;
+        assert!(restored.resume_point().is_none());
+    }
     #[test]
     fn unavailable_recordings_skip_duplicates_in_the_current_order() {
         let mut q = Queue {

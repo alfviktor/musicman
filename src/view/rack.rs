@@ -242,10 +242,10 @@ impl Workspace {
                     .items_end()
                     .justify_between()
                     .gap(px(6.))
-                    .child(counter(self.position))
+                    .child(counter(self.elapsed()))
                     .child(stamp(format!(
                         "−{}  /  {}",
-                        clock((self.track_duration() - self.position).max(0.)),
+                        clock((self.track_duration() - self.elapsed()).max(0.)),
                         clock(self.track_duration())
                     ))),
             )

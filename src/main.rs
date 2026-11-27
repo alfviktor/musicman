@@ -95,9 +95,22 @@ fn check(rx: async_channel::Receiver<Value>) -> Result<(), String> {
             .iter()
             .find(|t| t.title.eq_ignore_ascii_case(&term) && t.file.is_none())
             .ok_or("No matching Apple Music song")?;
-        audio::send("prepare", json!(t));
+        let mut request = json!(t);
+        if let Some(offset) = std::env::args().skip_while(|s| s != "--at").nth(1) {
+            let seconds = offset.parse::<f64>().map_err(|_| "Invalid start time")?;
+            if !seconds.is_finite() || seconds < 0. {
+                return Err("Invalid start time".into());
+            }
+            request["startAt"] = json!(seconds);
+        }
+        audio::send("prepare", request);
         let v = wait(&rx, "prepared")?;
-        println!("Prepared (silent): {} · {}", t.title, v["source"]);
+        println!(
+            "Prepared (silent): {} · {} · {:.2} s",
+            t.title,
+            v["source"],
+            v["position"].as_f64().unwrap_or_default()
+        );
     }
     for path in std::env::args().skip_while(|s| s != "--files").skip(1) {
         let absolute = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;

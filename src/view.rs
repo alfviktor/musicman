@@ -466,7 +466,20 @@ impl Workspace {
             .and_then(|i| self.lib.data.tracks.get(i))
     }
 
+    fn elapsed(&self) -> f64 {
+        if self.current.is_none() {
+            self.lib.queue.resume_point().map_or(0., |b| b.seconds)
+        } else {
+            self.position
+        }
+    }
     fn track_duration(&self) -> f64 {
+        if self.current.is_none()
+            && let Some(b) = self.lib.queue.resume_point()
+            && b.duration > 0.
+        {
+            return b.duration;
+        }
         if self.duration > 0. {
             self.duration
         } else {
@@ -477,7 +490,7 @@ impl Workspace {
     fn timeline(&self, cx: &mut Context<Self>) -> Stateful<Div> {
         let duration = self.track_duration();
         let fraction = if duration > 0. {
-            (self.position / duration).clamp(0., 1.)
+            (self.elapsed() / duration).clamp(0., 1.)
         } else {
             0.
         };
@@ -746,19 +759,32 @@ impl Workspace {
             .overflow_hidden()
             .child(command);
         if !self.choices.is_empty() {
-            for (i, (label, _)) in self.choices.iter().take(8).enumerate() {
-                main = main.child(
-                    div()
-                        .id(("choice", i))
-                        .mx(px(20.))
-                        .px(px(8.))
-                        .py(px(3.))
-                        .bg(rgb(PANEL))
-                        .cursor_pointer()
-                        .child(label.clone())
-                        .on_click(cx.listener(move |s, _, _, cx| s.choose(i, cx))),
-                )
-            }
+            let matches = uniform_list(
+                "command-matches",
+                self.choices.len(),
+                cx.processor(|s, range: std::ops::Range<usize>, _, cx| {
+                    range
+                        .map(|i| {
+                            div()
+                                .id(("choice", i))
+                                .h(px(25.))
+                                .px(px(8.))
+                                .flex()
+                                .items_center()
+                                .bg(rgb(if i == s.choice_row { SELECTED } else { PANEL }))
+                                .hover(|s| s.bg(rgb(HOVER)))
+                                .cursor_pointer()
+                                .child(label(s.choices[i].0.clone()))
+                                .on_click(cx.listener(move |s, _, _, cx| s.choose(i, cx)))
+                        })
+                        .collect()
+                }),
+            )
+            .h(px(25. * self.choices.len().min(6) as f32))
+            .flex_none()
+            .mx(px(20.))
+            .track_scroll(self.choice_scroll.clone());
+            main = main.child(matches);
         }
         let mut heading = div()
             .flex()
@@ -899,11 +925,7 @@ impl Workspace {
     }
     fn player(&self, cx: &mut Context<Self>) -> Div {
         let current = self.display_track();
-        let duration = if self.duration > 0. {
-            self.duration
-        } else {
-            current.map_or(0., |t| t.seconds)
-        };
+        let duration = self.track_duration();
         let id = current.and_then(|t| {
             self.lib
                 .cover_id(&t.album_artist, &t.album)
@@ -969,7 +991,7 @@ impl Workspace {
             .child(self.button("next", "❯", Action::Next, false, cx))
             .child(div().px(px(6.)).child(caption(format!(
                 "{} / {}",
-                clock(self.position),
+                clock(self.elapsed()),
                 clock(duration)
             ))))
             .child(self.button(
@@ -1008,6 +1030,23 @@ impl Workspace {
                 "r" => self.action(Action::Refresh, cx),
                 _ => return,
             }
+        } else if !self.choices.is_empty()
+            && matches!(k.key.as_str(), "up" | "down" | "enter" | "escape")
+        {
+            match k.key.as_str() {
+                "enter" => {
+                    self.choose(self.choice_row, cx);
+                    w.focus(&self.focus);
+                }
+                "escape" => {
+                    self.go(self.page.clone(), cx);
+                    w.focus(&self.focus);
+                }
+                "up" => self.choice_row = self.choice_row.saturating_sub(1),
+                _ => self.choice_row = (self.choice_row + 1).min(self.choices.len() - 1),
+            }
+            self.choice_scroll
+                .scroll_to_item(self.choice_row, ScrollStrategy::Center);
         } else if text {
             match k.key.as_str() {
                 "enter" => {
