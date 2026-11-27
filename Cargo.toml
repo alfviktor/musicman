@@ -4,6 +4,7 @@ version = "0.3.0"
 edition = "2024"
 publish = false
 license = "Apache-2.0"
+repository = "https://github.com/alfviktor/musicman"
 description = "A keyboard-driven music workspace for macOS, built with Rust and GPUI."
 
 [dependencies]

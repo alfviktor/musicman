@@ -1,15 +1,23 @@
 # Musicman
 
-A keyboard-driven macOS music player built with Rust and GPUI, the UI framework behind Zed. The home screen arranges your work music into shelves with artwork from your library. A narrow Swift adapter connects to MusicKit, iTunesLibrary, AVFAudio and Core Audio in the same process.
+<img src="assets/Musicman.png" width="112" height="112" align="right" alt="Musicman stereo icon">
+
+Musicman plays your local files and Apple Music library while Music.app is closed. Browse album shelves, queue a soundtrack, or press ⌘K and type `plastikman playlist on shuffle loop`. The signal inspector shows what Musicman can verify about the recording and your output device.
+
+The interface is written in Rust with GPUI, the framework behind Zed. A Swift adapter connects to MusicKit, iTunesLibrary, AVFAudio and Core Audio in the same process.
 
 ## Build
 
 Use macOS 14 or later with Rust, Python 3, Xcode and its Metal compiler installed. If Xcode reports a missing Metal toolchain, run `xcodebuild -downloadComponent MetalToolchain`.
 
 ```sh
+git clone https://github.com/alfviktor/musicman.git
+cd musicman
 ./build.sh
 open build/rust/Musicman.app
 ```
+
+For daily use, move the built Musicman.app into your Applications folder and open it from there. To pin that copy, Control-click its Dock icon and choose **Options → Keep in Dock**.
 
 The build uses ad hoc signing by default. For personal library access, supply a local Apple Development identity through `SIGN_IDENTITY`. Allow media-library access when macOS asks. Apple Music subscription tracks also require a signed-in subscription with access to the recording. Compatibility has been exercised on an Apple silicon Mac.
 

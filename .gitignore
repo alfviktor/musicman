@@ -1,3 +1,15 @@
 /target/
 /build/
 .DS_Store
+.env
+.env.*
+*.p8
+*.p12
+*.mobileprovision
+*.provisionprofile
+/library-v*.json
+/album-shelves.json
+/curation.json
+/opened-files.json
+/queue.json
+/equalizer.json
