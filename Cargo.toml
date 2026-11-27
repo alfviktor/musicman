@@ -1,0 +1,21 @@
+[package]
+name = "musicman"
+version = "0.3.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "A keyboard-driven music workspace for macOS, built with Rust and GPUI."
+
+[dependencies]
+async-channel = "2"
+gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.9"
+unicode-segmentation = "1"
+unicode-normalization = "0.1"
+url = "2"
+
+[profile.release]
+debug = 0
+incremental = false

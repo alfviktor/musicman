@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>Musicman</string>
+<key>CFBundleIdentifier</key><string>inc.zeroone.Pocketwheel</string>
+<key>CFBundleIconFile</key><string>Musicman.icns</string>
+<key>CFBundleDisplayName</key><string>Musicman</string>
+<key>CFBundleName</key><string>Musicman</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleVersion</key><string>3</string>
+<key>CFBundleShortVersionString</key><string>0.3</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>NSPrincipalClass</key><string>NSApplication</string>
+<key>NSAppleMusicUsageDescription</key><string>Play the songs you choose from your Apple Music library in Musicman.</string>
+</dict></plist>
