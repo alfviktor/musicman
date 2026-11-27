@@ -588,7 +588,7 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .w_full()
             .min_w_0()
-            .text_color(rgb(crate::theme::TEXT))
+            .text_color(rgb(crate::theme::PHOSPHOR))
             .line_height(px(30.))
             .text_size(px(14.))
             .child(
@@ -596,7 +596,7 @@ impl Render for TextInput {
                     .h(px(30. + 4. * 2.))
                     .w_full()
                     .p(px(4.))
-                    .bg(rgb(crate::theme::BG))
+                    .bg(rgb(crate::theme::GLASS))
                     .child(TextElement { input: cx.entity() }),
             )
     }

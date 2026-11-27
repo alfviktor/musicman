@@ -39,4 +39,4 @@ Musicman reads the local Music library and its Replay playlists. It caches artwo
 
 `src/` contains the GPUI interface, command handling, curation and queue. `native/` contains the Apple framework adapter. Run `cargo fmt --check` and `cargo test --release --locked` to check the Rust code. The bundled executable accepts `--check --refresh` to re-index the library and check artwork without playback. Add `--prepare "Song title"` to prepare a matching subscription track silently.
 
-Musicman is licensed under Apache-2.0. See LICENSE-APACHE and NOTICE. Its palette follows the [macOS Classic Dark theme for Zed](https://github.com/huacnlee/zed-theme-macos-classic).
+Musicman is licensed under Apache-2.0. See LICENSE-APACHE and NOTICE. Its native interface borrows the brushed keys and inset displays of vintage stereo components and the compact playlist layout of classic desktop players.

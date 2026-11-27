@@ -1,3 +1,4 @@
+mod rack;
 use crate::theme::*;
 use crate::{
     library::{Page, Pick, cache},
@@ -39,10 +40,14 @@ impl Workspace {
             .items_center()
             .justify_center()
             .text_size(px(12.))
-            .text_color(rgb(if accent { BG } else { TEXT }))
-            .bg(rgb(if accent { ACCENT } else { BUTTON }))
+            .font_weight(FontWeight::SEMIBOLD)
+            .border_1()
+            .border_color(rgb(0x6b7077))
+            .text_color(rgb(0x20252d))
+            .bg(keycap(accent))
             .cursor_pointer()
-            .hover(move |s| s.bg(rgb(if accent { TEXT } else { HOVER })))
+            .hover(move |s| s.bg(rgb(if accent { 0xffdf99 } else { 0xe4e6db })))
+            .active(|s| s.bg(rgb(0xa0a59b)))
             .child(text.into())
             .on_click(cx.listener(move |s, _, _, cx| s.action(act.clone(), cx)))
     }
@@ -63,7 +68,7 @@ impl Workspace {
             .h(px(29.))
             .px(px(11.))
             .bg(rgb(if active { SELECTED } else { SIDE }))
-            .text_color(rgb(if active { TEXT } else { TEXT }))
+            .text_color(rgb(if active { 0xf3f1da } else { TEXT }))
             .cursor_pointer()
             .hover(|s| s.bg(rgb(HOVER)))
             .child(
@@ -96,7 +101,7 @@ impl Workspace {
             .flex()
             .flex_col()
             .gap(px(2.))
-            .child(div().px(px(9.)).py(px(9.)).child(caption("LIBRARY")))
+            .child(rack::faceplate("LIBRARY"))
             .child(self.nav(0, "▦", "Work music".into(), Page::Work, cx))
             .child(self.nav(
                 1,
@@ -142,24 +147,12 @@ impl Workspace {
             }
         }
         if !groups.is_empty() {
-            links = links.child(
-                div()
-                    .px(px(9.))
-                    .pt(px(22.))
-                    .pb(px(5.))
-                    .child(caption("COLLECTIONS")),
-            )
+            links = links.child(div().pt(px(15.)).child(rack::faceplate("COLLECTIONS")))
         }
         for (i, g) in groups.into_iter().enumerate() {
             links = links.child(self.nav(i + 10, "◫", g.clone(), Page::Group(g.clone()), cx))
         }
-        links = links.child(
-            div()
-                .px(px(9.))
-                .pt(px(22.))
-                .pb(px(5.))
-                .child(caption("PLAYLISTS")),
-        );
+        links = links.child(div().pt(px(15.)).child(rack::faceplate("PLAYLISTS")));
         for (i, m) in self
             .lib
             .data
@@ -244,6 +237,7 @@ impl Workspace {
                     .child(
                         div()
                             .id(("collection", key))
+                            .bg(metal())
                             .px(px(12.))
                             .h(px(39.))
                             .flex()
@@ -255,9 +249,11 @@ impl Workspace {
                                 div()
                                     .text_color(rgb(ACCENT))
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child(name.to_lowercase()),
+                                    .child(name.to_uppercase()),
                             )
-                            .child(caption(format!("{} releases  ›", albums.len())))
+                            .child(rack::stripe())
+                            .gap(px(9.))
+                            .child(caption(format!("{}  ›", albums.len())))
                             .on_click(cx.listener(move |s, _, _, cx| s.go(page.clone(), cx))),
                     );
                 for (i, p) in albums.iter().take(3).enumerate() {
@@ -266,6 +262,8 @@ impl Workspace {
                     shelf = shelf.child(
                         div()
                             .id(("shelf-album", key * 3 + i))
+                            .bg(rgb(GLASS))
+                            .text_color(rgb(PHOSPHOR))
                             .h(px(62.))
                             .px(px(11.))
                             .flex()
@@ -389,7 +387,7 @@ impl Workspace {
             .gap(px(9.))
             .border_b_1()
             .border_color(rgb(PANEL))
-            .bg(rgb(if sel { SELECTED } else { BG }))
+            .bg(rgb(if sel { SELECTED } else { GLASS }))
             .hover(move |s| s.bg(rgb(if sel { SELECTED } else { STATUS })))
             .cursor_pointer()
             .child(div().w(px(36.)).flex_none().child(caption(marker)))
@@ -398,7 +396,7 @@ impl Workspace {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .text_color(rgb(if now { ACCENT } else { TEXT }))
+                    .text_color(rgb(if now { ACCENT } else { PHOSPHOR }))
                     .child(t.title.clone()),
             )
             .child(
@@ -484,6 +482,34 @@ impl Workspace {
             0.
         };
         let bounds = self.seek_bounds.clone();
+        let groove = div()
+            .relative()
+            .w_full()
+            .h(px(if self.now_view { 7. } else { 4. }))
+            .bg(rgb(if self.now_view { 0x30352f } else { EDGE }))
+            .child(div().w(relative(fraction as f32)).h_full().bg(rgb(ACCENT)));
+        let groove = if self.now_view {
+            groove.child(
+                div().absolute().inset_0().mx(px(6.)).child(
+                    div()
+                        .absolute()
+                        .left(relative(fraction as f32))
+                        .top(px(-3.))
+                        .ml(px(-6.))
+                        .w(px(12.))
+                        .h(px(13.))
+                        .border_1()
+                        .border_color(rgb(0x545856))
+                        .bg(linear_gradient(
+                            180.,
+                            linear_color_stop(rgb(0xe0e4db), 0.),
+                            linear_color_stop(rgb(0x939a9e), 1.),
+                        )),
+                ),
+            )
+        } else {
+            groove
+        };
         div()
             .id("timeline")
             .w_full()
@@ -492,14 +518,7 @@ impl Workspace {
             .flex()
             .items_center()
             .cursor_pointer()
-            .child(
-                div()
-                    .relative()
-                    .w_full()
-                    .h(px(4.))
-                    .bg(rgb(EDGE))
-                    .child(div().w(relative(fraction as f32)).h_full().bg(rgb(ACCENT))),
-            )
+            .child(groove)
             .child(
                 canvas(move |b, _, _| bounds.set(b), |_, _, _, _| {})
                     .absolute()
@@ -525,7 +544,7 @@ impl Workspace {
             .items_center()
             .pl(px(80.))
             .pr(px(8.))
-            .bg(rgb(TITLE))
+            .bg(metal())
             .gap(px(4.));
         let mut path = vec![("Musicman".to_string(), Page::Work)];
         let page = if self.now_view {
@@ -626,133 +645,19 @@ impl Workspace {
             div()
                 .flex_1()
                 .h_full()
+                .flex()
+                .items_center()
+                .px(px(10.))
+                .child(rack::stripe())
                 .window_control_area(WindowControlArea::Drag),
         )
-    }
-
-    fn now_panel(&self, width: f32, cx: &mut Context<Self>) -> Div {
-        let mut panel = div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .px(px(25.))
-            .py(px(18.))
-            .gap(px(17.));
-        let Some(t) = self.display_track() else {
-            return panel.child(label("Queue a track to open Now Playing."));
-        };
-        let status = if self.pending.is_some() {
-            "Loading"
-        } else if self.ended {
-            "Finished"
-        } else if self.playing {
-            "Playing"
-        } else if self.current.is_some() {
-            "Paused"
-        } else {
-            "Queued"
-        };
-        let art = self
-            .lib
-            .cover_id(&t.album_artist, &t.album)
-            .unwrap_or(&t.id);
-        let size = if width < 925. { 154. } else { 210. };
-        let d = self.track_duration();
-        let content = div()
-            .flex_1()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .justify_center()
-            .gap(px(10.))
-            .child(div().text_color(rgb(PROMPT)).child(status))
-            .child(
-                div()
-                    .text_size(px(25.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .line_height(px(30.))
-                    .child(t.title.clone()),
-            )
-            .child(label(t.artist.clone()))
-            .child(caption(short_title(&t.album)))
-            .child(self.timeline(cx))
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .child(caption(clock(self.position)))
-                    .child(caption(format!("−{}", clock((d - self.position).max(0.))))),
-            );
-        panel = panel
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(23.))
-                    .child(self.art(Some(art), size))
-                    .child(content),
-            )
-            .child(line());
-        if self.current.is_some() {
-            for (name, val) in [
-                ("SOURCE", &self.source),
-                ("STREAM", &self.active),
-                ("OUTPUT", &self.output),
-                ("EQ", &self.eq_route),
-            ] {
-                if !val.is_empty() {
-                    panel = panel.child(
-                        div()
-                            .flex()
-                            .gap(px(15.))
-                            .child(div().w(px(66.)).child(caption(name)))
-                            .child(label(val.clone())),
-                    );
-                }
-            }
-        }
-        let upcoming = self
-            .lib
-            .queue
-            .ids
-            .iter()
-            .skip(self.lib.queue.position.map_or(0, |i| i + 1))
-            .take(3);
-        let mut next = div().flex().flex_col().gap(px(6.));
-        for id in upcoming {
-            if let Some(t) = self
-                .lib
-                .ids
-                .get(id)
-                .and_then(|i| self.lib.data.tracks.get(*i))
-            {
-                next = next.child(
-                    div()
-                        .flex()
-                        .justify_between()
-                        .gap(px(12.))
-                        .child(label(format!("{}  ·  {}", t.title, t.artist)))
-                        .child(caption(clock(t.seconds))),
-                );
-            }
-        }
-        panel
-            .child(
-                div()
-                    .id("upcoming")
-                    .cursor_pointer()
-                    .hover(|s| s.text_color(rgb(ACCENT)))
-                    .child("Up next  ›")
-                    .on_click(cx.listener(|s, _, _, cx| s.go(Page::Queue, cx))),
-            )
-            .child(next)
     }
 
     fn eq_panel(&self, cx: &mut Context<Self>) -> Div {
         let gains = self.eq.gains();
         let mut presets = div()
             .id("eq-presets")
+            .bg(rgb(GLASS))
             .overflow_x_scroll()
             .flex()
             .items_center()
@@ -768,7 +673,8 @@ impl Workspace {
                     .px(px(7.))
                     .py(px(3.))
                     .cursor_pointer()
-                    .bg(rgb(if active { SELECTED } else { BUTTON }))
+                    .text_color(rgb(0x20252d))
+                    .bg(keycap(active))
                     .child(key.clone())
                     .on_click(
                         cx.listener(move |s, _, _, cx| s.action(Action::Preset(key.clone()), cx)),
@@ -789,8 +695,9 @@ impl Workspace {
                 bands = bands.child(
                     div()
                         .id(("band", i * 2 + usize::from(delta > 0)))
+                        .text_color(rgb(0x20252d))
                         .px(px(6.))
-                        .bg(rgb(BUTTON))
+                        .bg(keycap(false))
                         .cursor_pointer()
                         .child(button_id)
                         .on_click(
@@ -827,8 +734,8 @@ impl Workspace {
             .px(px(10.))
             .border_1()
             .border_color(rgb(EDGE))
-            .bg(rgb(BG))
-            .child(div().text_color(rgb(PROMPT)).font_family(MONO).child(">"))
+            .bg(rgb(GLASS))
+            .child(div().text_color(rgb(PHOSPHOR)).font_family(MONO).child(">"))
             .child(div().flex_1().min_w_0().child(self.search.clone()))
             .child(caption("⌘ K"));
         let mut main = div()
@@ -945,7 +852,7 @@ impl Workspace {
                     .items_center()
                     .gap(px(9.))
                     .px(px(16.))
-                    .bg(rgb(PANEL))
+                    .bg(metal())
                     .child(div().w(px(36.)).child(caption("#")))
                     .child(div().flex_1().child(caption("TITLE")))
                     .child(div().w(relative(0.24)).child(caption("ARTIST")))
@@ -972,7 +879,7 @@ impl Workspace {
                 .gap(px(6.))
                 .h(px(40.))
                 .px(px(12.))
-                .bg(rgb(SIDE));
+                .bg(metal());
             if self.page != Page::Hidden {
                 edit = edit
                     .child(self.button("play-next", "Play next", Action::Enqueue(true), false, cx))
@@ -1016,7 +923,7 @@ impl Workspace {
             .items_center()
             .gap(px(11.))
             .px(px(15.))
-            .bg(rgb(PANEL))
+            .bg(metal())
             .child(
                 div()
                     .id("now-cover")
@@ -1034,6 +941,7 @@ impl Workspace {
                     .child(
                         div()
                             .id("now-title")
+                            .text_color(rgb(PHOSPHOR))
                             .cursor_pointer()
                             .child(label(title))
                             .on_click(cx.listener(|s, _, _, cx| s.action(Action::NowPlaying, cx))),
@@ -1134,6 +1042,7 @@ impl Workspace {
                     self.select(r, k.modifiers.shift, false);
                     self.scroll.scroll_to_item(r, ScrollStrategy::Center)
                 }
+                "enter" if self.now_view => self.action(Action::Toggle, cx),
                 "enter" => self.action(Action::Play, cx),
                 "space" => self.action(Action::Toggle, cx),
                 "backspace" | "delete" if self.page == Page::Queue => {
@@ -1224,7 +1133,10 @@ impl Render for Workspace {
         if !self.now_view && self.current.is_some() {
             shell = shell.child(self.timeline(cx));
         }
-        shell.child(line()).child(self.player(cx)).child(
+        if !self.now_view || self.display_track().is_none() {
+            shell = shell.child(line()).child(self.player(cx));
+        }
+        shell.child(
             div()
                 .h(px(24.))
                 .flex_none()
