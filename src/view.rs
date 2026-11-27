@@ -42,12 +42,12 @@ impl Workspace {
             .text_size(px(12.))
             .font_weight(FontWeight::SEMIBOLD)
             .border_1()
-            .border_color(rgb(0x6b7077))
-            .text_color(rgb(0x20252d))
+            .border_color(rgb(RAIL))
+            .text_color(rgb(BG))
             .bg(keycap(accent))
             .cursor_pointer()
-            .hover(move |s| s.bg(rgb(if accent { 0xffdf99 } else { 0xe4e6db })))
-            .active(|s| s.bg(rgb(0xa0a59b)))
+            .hover(move |s| s.bg(rgb(if accent { ACCENT } else { KEY_HIGHLIGHT })))
+            .active(|s| s.bg(rgb(KEY_SHADOW)))
             .child(text.into())
             .on_click(cx.listener(move |s, _, _, cx| s.action(act.clone(), cx)))
     }
@@ -68,7 +68,7 @@ impl Workspace {
             .h(px(29.))
             .px(px(11.))
             .bg(rgb(if active { SELECTED } else { SIDE }))
-            .text_color(rgb(if active { 0xf3f1da } else { TEXT }))
+            .text_color(rgb(if active { TEXT } else { TEXT }))
             .cursor_pointer()
             .hover(|s| s.bg(rgb(HOVER)))
             .child(
@@ -247,7 +247,7 @@ impl Workspace {
                             .hover(|s| s.bg(rgb(HOVER)))
                             .child(
                                 div()
-                                    .text_color(rgb(ACCENT))
+                                    .text_color(rgb(TEXT))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .child(name.to_uppercase()),
                             )
@@ -486,7 +486,7 @@ impl Workspace {
             .relative()
             .w_full()
             .h(px(if self.now_view { 7. } else { 4. }))
-            .bg(rgb(if self.now_view { 0x30352f } else { EDGE }))
+            .bg(rgb(if self.now_view { UNLIT } else { EDGE }))
             .child(div().w(relative(fraction as f32)).h_full().bg(rgb(ACCENT)));
         let groove = if self.now_view {
             groove.child(
@@ -499,11 +499,11 @@ impl Workspace {
                         .w(px(12.))
                         .h(px(13.))
                         .border_1()
-                        .border_color(rgb(0x545856))
+                        .border_color(rgb(EDGE))
                         .bg(linear_gradient(
                             180.,
-                            linear_color_stop(rgb(0xe0e4db), 0.),
-                            linear_color_stop(rgb(0x939a9e), 1.),
+                            linear_color_stop(rgb(KEY_HIGHLIGHT), 0.),
+                            linear_color_stop(rgb(KEY_SHADOW), 1.),
                         )),
                 ),
             )
@@ -673,7 +673,7 @@ impl Workspace {
                     .px(px(7.))
                     .py(px(3.))
                     .cursor_pointer()
-                    .text_color(rgb(0x20252d))
+                    .text_color(rgb(BG))
                     .bg(keycap(active))
                     .child(key.clone())
                     .on_click(
@@ -695,7 +695,7 @@ impl Workspace {
                 bands = bands.child(
                     div()
                         .id(("band", i * 2 + usize::from(delta > 0)))
-                        .text_color(rgb(0x20252d))
+                        .text_color(rgb(BG))
                         .px(px(6.))
                         .bg(keycap(false))
                         .cursor_pointer()
@@ -1006,7 +1006,6 @@ impl Workspace {
                 "o" => self.action(Action::Open, cx),
                 "i" => self.action(Action::Inspect, cx),
                 "r" => self.action(Action::Refresh, cx),
-                "q" => cx.quit(),
                 _ => return,
             }
         } else if text {

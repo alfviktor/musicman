@@ -37,7 +37,7 @@ struct EqualizerGains: Codable, Equatable {
     }
     init(url: URL, gains: EqualizerGains) throws {
         file = try AVAudioFile(forReading: url)
-        guard file.length > 0 else { throw PlayerError("The audio file is empty.") }
+        guard file.length > 0 else { throw UnavailableTrack("The audio file is empty.") }
         graph.attach(node)
         graph.attach(equalizer)
         graph.connect(node, to: equalizer, format: file.processingFormat)

@@ -47,6 +47,7 @@ pub struct Workspace {
     pub focus: FocusHandle,
     pub scroll: UniformListScrollHandle,
     pub pending: Option<(Queue, usize)>,
+    unavailable: HashSet<String>,
     pub current: Option<usize>,
     pub playing: bool,
     pub ended: bool,
@@ -106,6 +107,7 @@ impl Workspace {
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             pending: None,
+            unavailable: HashSet::new(),
             current: None,
             playing: false,
             ended: false,
@@ -183,6 +185,36 @@ impl Workspace {
                         self.lib.add_file(t);
                     }
                     self.go(Page::Files, cx);
+                }
+            }
+            "unavailable" => {
+                let id = string("id");
+                let attempt = if let Some((q, i)) = &self.pending {
+                    if q.ids.get(*i) != Some(&id) {
+                        return;
+                    }
+                    self.pending.take()
+                } else {
+                    self.lib
+                        .queue
+                        .position
+                        .filter(|&i| {
+                            self.current.is_some() && self.lib.queue.ids.get(i) == Some(&id)
+                        })
+                        .map(|i| (self.lib.queue.clone(), i))
+                };
+                if let Some((mut q, i)) = attempt {
+                    self.unavailable.insert(id);
+                    self.current = None;
+                    self.playing = false;
+                    self.ended = true;
+                    self.position = 0.;
+                    self.duration = 0.;
+                    self.source.clear();
+                    self.active.clear();
+                    // A failed repeat-one item falls through to the following recording.
+                    q.position = None;
+                    self.start(q, i);
                 }
             }
             "error" => {
@@ -362,12 +394,21 @@ impl Workspace {
         if self.pending.is_some() {
             return;
         }
-        let Some(&idx) = q.ids.get(i).and_then(|id| self.lib.ids.get(id)) else {
+        let Some(i) = q.playable_from(i, |id| {
+            self.lib.ids.contains_key(id)
+                && !self.lib.c.hidden.contains(id)
+                && !self.unavailable.contains(id)
+        }) else {
+            if self.ended {
+                self.lib.queue = q;
+                self.persist_queue();
+                if self.page == Page::Queue {
+                    self.rebuild();
+                }
+            }
             return;
         };
-        if self.lib.c.hidden.contains(&self.lib.data.tracks[idx].id) {
-            return;
-        }
+        let idx = self.lib.ids[&q.ids[i]];
         self.message.clear();
         audio::send("play", json!(self.lib.data.tracks[idx]));
         self.pending = Some((q, i));
@@ -376,6 +417,7 @@ impl Workspace {
         if self.page == Page::Hidden || r >= self.rows.len() {
             return;
         }
+        self.unavailable.clear();
         let q = if self.page == Page::Queue {
             self.lib.queue.clone()
         } else {
@@ -456,6 +498,7 @@ impl Workspace {
                 if self.current.is_some() && !self.ended {
                     audio::send("toggle", Value::Null)
                 } else if !self.lib.queue.ids.is_empty() {
+                    self.unavailable.clear();
                     self.start(self.lib.queue.clone(), self.lib.queue.position.unwrap_or(0))
                 } else if !seq.is_empty() {
                     self.action(Play, cx)
@@ -463,6 +506,7 @@ impl Workspace {
             }
             Shuffle => {
                 if !self.rows.is_empty() && self.page != Page::Hidden {
+                    self.unavailable.clear();
                     let mut ids: Vec<_> = self
                         .rows
                         .iter()

@@ -19,6 +19,8 @@ Select a collection or album to see its tracks. Double-click a track to play it.
 
 Use ⌘K to search or enter a command. Examples include `night drive playlist on shuffle loop`, `play next Time by Hans Zimmer`, `repeat one`, and `show queue`. Commands are matched locally. Use ⌘O to open audio files and ⌘I to inspect the signal.
 
+Missing files and unavailable recordings are skipped automatically. A looping queue stops quietly when every remaining recording has been tried. Selecting a recording again retries it. Closing the last window or choosing Quit Musicman stops the player.
+
 ## Now Playing and equalizer
 
 Click the cover, song title or **Now playing** in the sidebar to see the record sleeve, signal details and upcoming songs. ⌘J toggles this view. Click the timeline to seek. The title bar links back to the collection and album.

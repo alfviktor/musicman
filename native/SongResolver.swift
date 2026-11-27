@@ -14,7 +14,7 @@ enum SongResolver {
                 && (song.discNumber == nil || track.disc == 0 || song.discNumber == track.disc)
                 && (song.duration == nil || track.seconds == 0 || abs(song.duration! - track.seconds) < 2) {
                 if let match, match.id != song.id {
-                    throw PlayerError("Multiple recordings match. Choose a distinct recording from the library.")
+                    throw UnavailableTrack("The library recording could not be uniquely identified.")
                 }
                 match = song
             }
@@ -22,7 +22,7 @@ enum SongResolver {
             batch = more
         }
         guard let song = match, song.playParameters != nil else {
-            throw PlayerError("MusicKit could not identify a playable copy. Check Apple Music access and subscription status.")
+            throw UnavailableTrack("MusicKit could not identify a playable copy.")
         }
         return song
     }

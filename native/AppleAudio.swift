@@ -1,5 +1,8 @@
 import AppKit
 import AVFAudio
+import AVFoundation
+import AudioToolbox
+import MediaPlayer
 import MusicKit
 import ImageIO
 import iTunesLibrary
@@ -9,6 +12,40 @@ struct PlayerError: LocalizedError {
     let message: String
     init(_ message: String) { self.message = message }
     var errorDescription: String? { message }
+}
+
+// Only failures belonging to one recording can advance the queue. Route,
+// authorization and connection failures must be handled by the listener.
+struct UnavailableTrack: LocalizedError {
+    let reason: String
+    init(_ reason: String) { self.reason = reason }
+    var errorDescription: String? { reason }
+
+    static func matches(_ error: Error) -> Bool {
+        if error is UnavailableTrack { return true }
+        var cause: NSError? = error as NSError
+        for _ in 0..<6 {
+            guard let e = cause else { break }
+            if e.domain == MPErrorDomain {
+                if e.code == MPError.Code.notFound.rawValue {return true}
+                if [MPError.Code.permissionDenied, .cloudServiceCapabilityMissing, .networkConnectionFailed, .requestTimedOut,
+                    .cancelled].contains(where: { $0.rawValue == e.code }) {return false}
+            }
+            if e.domain == NSOSStatusErrorDomain && [kAudioFileInvalidFileError,kAudioFileFileNotFoundError,
+                kAudioFileUnsupportedFileTypeError,kAudioFileUnsupportedDataFormatError].contains(where: {Int($0) == e.code}) {return true}
+            if e.domain == NSCocoaErrorDomain && [NSFileReadNoSuchFileError, NSFileNoSuchFileError].contains(e.code) { return true }
+            if e.domain == AVFoundationErrorDomain && [
+                AVError.Code.fileFormatNotRecognized, .fileFailedToParse, .decoderNotFound, .incompatibleAsset, .invalidSourceMedia, .noLongerPlayable
+            ].contains(where: { $0.rawValue == e.code }) { return true }
+            // Some MusicKit builds wrap catalog failures in an opaque player error.
+            let detail = [e.localizedDescription, e.localizedFailureReason ?? "",
+                          e.userInfo[NSDebugDescriptionErrorKey] as? String ?? ""].joined(separator: " ").lowercased()
+            if ["no playable items", "no playable content", "item is not playable", "track is unavailable",
+                "not available in your country or region"].contains(where: detail.contains) { return true }
+            cause = e.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
 }
 
 typealias EventSink = @convention(c) (UnsafePointer<CChar>) -> Void
@@ -84,6 +121,8 @@ private actor Artwork {
         generation += 1
         stop(); id = track.id; source = ""; sourceRate = nil
         if let file = track.file {
+            do { _ = try file.resourceValues(forKeys: [.isRegularFileKey]) }
+            catch { if UnavailableTrack.matches(error) { throw UnavailableTrack("Audio file is missing.") }; throw error }
             let q = AudioQuality.file(file); source = q.label; sourceRate = q.hz
             if !prepareOnly { try await match() }
             try openFile(file, gains: gains, position: 0, audible: !prepareOnly)
@@ -124,7 +163,7 @@ private actor Artwork {
         let previousLocal = local, previousEQ = filtered
         if gains.flat {
             let next = try AVAudioPlayer(contentsOf: url)
-            guard next.prepareToPlay() else { throw PlayerError("The file could not be prepared.") }
+            guard next.prepareToPlay() else { throw UnavailableTrack("The file could not be prepared.") }
             next.currentTime = position
             previousEQ?.pause()
             if audible && !next.play() {
@@ -166,7 +205,15 @@ private actor Artwork {
     }
     func finish() {timer?.invalidate(); timer = nil; playing = false; info("ended")}
     nonisolated func audioPlayerDidFinishPlaying(_ player:AVAudioPlayer,successfully flag:Bool) {
-        Task { @MainActor in guard player === self.local else {return}; if flag {self.finish()} else {self.stop(); emit(self.sink,"error",["message":"Local audio decoding failed."])} }
+        Task { @MainActor in guard player === self.local else {return}; if flag {self.finish()} else {self.decodeFailed(player)} }
+    }
+    private func decodeFailed(_ player: AVAudioPlayer) {
+        guard player === local else { return }
+        stop()
+        emit(sink, "unavailable", ["id":id])
+    }
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        Task { @MainActor in self.decodeFailed(player) }
     }
     func command(_ method: String, _ bytes: Data) async throws {
         switch method {
@@ -205,7 +252,21 @@ private actor Artwork {
 @_cdecl("pw_connect") public func pwConnect(_ callback: @convention(c) (UnsafePointer<CChar>)->Void) { MainActor.assumeIsolated { Engine.shared.sink = callback } }
 @_cdecl("pw_send") public func pwSend(_ method: UnsafePointer<CChar>,_ text: UnsafePointer<CChar>) {
     let name=String(cString:method), bytes=Data(String(cString:text).utf8)
-    Task { @MainActor in do {try await Engine.shared.command(name,bytes)} catch {emit(Engine.shared.sink,"error",["action":name,"message":error.localizedDescription])} }
+    Task { @MainActor in do {try await Engine.shared.command(name,bytes)} catch {
+        let engine = Engine.shared
+        if (name == "play" || name == "toggle") && UnavailableTrack.matches(error) {
+            engine.stop();
+            emit(engine.sink,"unavailable",["id":engine.id])
+        } else { emit(engine.sink,"error",["action":name,"message":error.localizedDescription]) }
+    } }
 }
 @_cdecl("pw_pump") public func pwPump() { RunLoop.current.run(until:Date(timeIntervalSinceNow:0.02)) }
 @_cdecl("pw_shutdown") public func pwShutdown() { MainActor.assumeIsolated { let e=Engine.shared; e.stop(); e.matcher.restore(wait:true) } }
+
+@_cdecl("pw_activate_existing") public func activateExisting() {
+    guard let identifier = Bundle.main.bundleIdentifier else {return}
+    let me = ProcessInfo.processInfo.processIdentifier
+    let other = NSRunningApplication.runningApplications(withBundleIdentifier: identifier)
+        .first { $0.processIdentifier != me && !$0.isTerminated }
+    _ = other?.activate(options: [])
+}

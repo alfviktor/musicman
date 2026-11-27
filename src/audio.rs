@@ -8,6 +8,7 @@ unsafe extern "C" {
     fn pw_connect(cb: extern "C" fn(*const c_char));
     fn pw_send(method: *const c_char, text: *const c_char);
     fn pw_shutdown();
+    fn pw_activate_existing();
     fn pw_pump();
 }
 static EVENTS: OnceLock<Sender<Value>> = OnceLock::new();
@@ -38,4 +39,8 @@ pub fn shutdown() {
 }
 pub fn pump() {
     unsafe { pw_pump() }
+}
+
+pub fn activate_existing() {
+    unsafe { pw_activate_existing() }
 }

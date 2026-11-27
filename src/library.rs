@@ -116,6 +116,20 @@ pub struct Queue {
     pub mode: String,
 }
 impl Queue {
+    /// Walk the current order once, including the prefix only when the whole queue loops.
+    pub fn playable_from(
+        &self,
+        start: usize,
+        mut playable: impl FnMut(&str) -> bool,
+    ) -> Option<usize> {
+        if start >= self.ids.len() {
+            return None;
+        }
+        let wrap = if self.mode == "All" { start } else { 0 };
+        (start..self.ids.len())
+            .chain(0..wrap)
+            .find(|&i| playable(&self.ids[i]))
+    }
     pub fn next(&mut self, manual: bool) -> Option<usize> {
         if self.ids.is_empty() {
             return None;
@@ -421,6 +435,22 @@ mod tests {
         }
     }
 
+    #[test]
+    fn unavailable_recordings_skip_duplicates_in_the_current_order() {
+        let mut q = Queue {
+            ids: ["gone", "gone", "live"].map(String::from).to_vec(),
+            ..Default::default()
+        };
+        for mode in ["Off", "One song", "All"] {
+            q.mode = mode.into();
+            assert_eq!(q.playable_from(0, |id| id != "gone"), Some(2));
+            assert_eq!(q.playable_from(0, |_| false), None);
+        }
+        q.ids.reverse();
+        assert_eq!(q.playable_from(1, |id| id == "live"), Some(0));
+        q.mode = "Off".into();
+        assert_eq!(q.playable_from(1, |id| id == "live"), None);
+    }
     #[test]
     fn repeat_one_applies_to_natural_end_and_all_wraps() {
         let mut q = queue();

@@ -1,21 +1,18 @@
 use super::*;
 
-const ETCH: u32 = 0x899a86;
-const CHASSIS: u32 = 0x303541;
-
 fn bezel() -> Div {
     div()
         .flex_none()
         .p(px(2.))
-        .bg(finish(0x888b90, 0x101216))
+        .bg(finish(RAIL, GLASS))
         .flex()
         .flex_col()
 }
 
 pub(super) fn stripe() -> Div {
-    let mut rails = div().flex_1().h(px(9.)).flex().flex_col().justify_between();
-    for _ in 0..3 {
-        rails = rails.child(div().w_full().h(px(1.)).bg(rgb(0x929387)));
+    let mut rails = div().flex_1().h(px(4.)).flex().flex_col().justify_between();
+    for _ in 0..2 {
+        rails = rails.child(div().w_full().h(px(1.)).bg(rgb(RAIL)));
     }
     rails
 }
@@ -27,13 +24,13 @@ pub(super) fn faceplate(title: &str) -> Div {
         .flex()
         .items_center()
         .gap(px(10.))
-        .bg(finish(0x434857, 0x272d38))
+        .bg(metal())
         .child(stripe())
         .child(
             div()
                 .text_size(px(11.))
                 .font_weight(FontWeight::BOLD)
-                .text_color(rgb(0xe1e2d3))
+                .text_color(rgb(TEXT))
                 .child(title.to_owned()),
         )
         .child(stripe())
@@ -42,7 +39,7 @@ pub(super) fn faceplate(title: &str) -> Div {
 fn stamp(text: impl Into<SharedString>) -> Div {
     div()
         .text_size(px(10.))
-        .text_color(rgb(0xb4b7ad))
+        .text_color(rgb(DIM))
         .child(text.into())
 }
 
@@ -89,7 +86,7 @@ fn counter(seconds: f64) -> Div {
                             rgb(if mask & (1 << i) != 0 {
                                 PHOSPHOR
                             } else {
-                                0x223027
+                                UNLIT
                             }),
                         ));
                     }
@@ -117,12 +114,12 @@ impl Workspace {
             .w_full()
             .h(px(29.))
             .border_1()
-            .border_color(rgb(0x101319))
+            .border_color(rgb(BG))
             .p(px(2.))
-            .bg(finish(0xf2f0dd, 0x616975))
+            .bg(finish(KEY_HIGHLIGHT, RAIL))
             .cursor_pointer()
-            .hover(|s| s.bg(rgb(0xe5ddb9)))
-            .active(|s| s.bg(rgb(0x626871)))
+            .hover(|s| s.bg(rgb(TEXT)))
+            .active(|s| s.bg(rgb(KEY_SHADOW)))
             .child(
                 div()
                     .size_full()
@@ -132,7 +129,7 @@ impl Workspace {
                     .bg(keycap(active))
                     .text_size(px(14.))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(rgb(0x212734))
+                    .text_color(rgb(BG))
                     .child(symbol.to_owned()),
             )
             .on_click(cx.listener(move |s, _, _, cx| s.action(action.clone(), cx)));
@@ -209,8 +206,8 @@ impl Workspace {
             .gap(px(8.))
             .p(px(13.))
             .border_1()
-            .border_color(rgb(0x171919))
-            .bg(finish(0x19211c, GLASS))
+            .border_color(rgb(GLASS))
+            .bg(finish(STATUS, GLASS))
             .child(stamp_row)
             .child(
                 div()
@@ -228,12 +225,12 @@ impl Workspace {
                     .child(
                         div()
                             .text_size(px(13.))
-                            .text_color(rgb(0xc6d2bf))
+                            .text_color(rgb(TEXT))
                             .child(track.artist.clone()),
                     )
                     .child(
                         div()
-                            .text_color(rgb(ETCH))
+                            .text_color(rgb(DIM))
                             .text_size(px(11.))
                             .child(short_title(&track.album)),
                     ),
@@ -256,7 +253,7 @@ impl Workspace {
         let sleeve = bezel().child(
             div()
                 .p(px(4.))
-                .bg(rgb(0x0c0c10))
+                .bg(rgb(GLASS))
                 .child(self.art(Some(album_id), if narrow { 123. } else { 163. })),
         );
         let display = div()
@@ -304,7 +301,7 @@ impl Workspace {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .bg(finish(CHASSIS, 0x222530))
+            .bg(metal())
             .child(display)
             .child(keys);
         rack = rack.child(bezel().child(faceplate("MUSICMAN")).child(player));
@@ -348,9 +345,9 @@ impl Workspace {
                         Bounds::new(b.origin + point(px(x), px(y)), size(px(width), px(height)))
                     };
                     for i in 0..7 {
-                        w.paint_quad(fill(rect(0., 3. + i as f32 * 4., 24., 1.), rgb(0x723f37)));
+                        w.paint_quad(fill(rect(0., 3. + i as f32 * 4., 24., 1.), rgb(RAIL)));
                     }
-                    w.paint_quad(fill(rect(10., 0., 4., 30.), rgb(0x07090b)));
+                    w.paint_quad(fill(rect(10., 0., 4., 30.), rgb(GLASS)));
                     let y = 3. + (6. - f32::from(gain)) * 2.;
                     w.paint_quad(fill(rect(5., y - 2., 14., 5.), keycap(false)));
                 },
@@ -411,15 +408,15 @@ impl Workspace {
                     .flex()
                     .gap(px(8.))
                     .items_center()
-                    .bg(rgb(if selected { 0x283139 } else { GLASS }))
+                    .bg(rgb(if selected { SELECTED } else { GLASS }))
                     .cursor_pointer()
-                    .hover(|s| s.bg(rgb(0x29312c)))
-                    .text_color(rgb(if selected { 0xe4e6d9 } else { PHOSPHOR }))
+                    .hover(|s| s.bg(rgb(HOVER)))
+                    .text_color(rgb(if selected { TEXT } else { PHOSPHOR }))
                     .child(
                         div()
                             .w(px(27.))
                             .flex_none()
-                            .text_color(rgb(ETCH))
+                            .text_color(rgb(DIM))
                             .child(format!("{:02}", i + 1)),
                     )
                     .child(
@@ -449,11 +446,6 @@ impl Workspace {
             )))
             .on_click(cx.listener(|s, _, _, cx| s.go(Page::Queue, cx)));
         rack = rack.child(bezel().child(queue_head).child(list));
-        div()
-            .flex_1()
-            .min_w_0()
-            .min_h_0()
-            .bg(rgb(0x151619))
-            .child(rack)
+        div().flex_1().min_w_0().min_h_0().bg(rgb(BG)).child(rack)
     }
 }

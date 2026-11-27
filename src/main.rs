@@ -7,7 +7,25 @@ mod view;
 mod workspace;
 use gpui::*;
 use serde_json::{Value, json};
+use std::fs::{File, TryLockError};
 use std::time::{Duration, Instant};
+actions!(musicman, [QuitMusicman, CloseMusicman]);
+
+fn claim_player() -> std::io::Result<Option<File>> {
+    let dir = library::settings();
+    std::fs::create_dir_all(&dir)?;
+    let file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(dir.join("player.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => Err(error),
+    }
+}
 
 fn check(rx: async_channel::Receiver<Value>) -> Result<(), String> {
     fn wait(rx: &async_channel::Receiver<Value>, kind: &str) -> Result<Value, String> {
@@ -91,9 +109,8 @@ fn check(rx: async_channel::Receiver<Value>) -> Result<(), String> {
     Ok(())
 }
 fn main() {
-    let rx = audio::connect();
     if std::env::args().any(|s| s == "--check") {
-        let result = check(rx);
+        let result = check(audio::connect());
         audio::shutdown();
         if let Err(e) = result {
             eprintln!("{e}");
@@ -101,7 +118,39 @@ fn main() {
         }
         return;
     }
+    let _instance = match claim_player() {
+        Ok(Some(lock)) => lock,
+        Ok(None) => {
+            audio::activate_existing();
+            return;
+        }
+        Err(error) => {
+            eprintln!("Cannot open Musicman: {error}");
+            std::process::exit(1);
+        }
+    };
+    let rx = audio::connect();
     Application::new().run(move |cx| {
+        cx.bind_keys([
+            KeyBinding::new("cmd-q", QuitMusicman, None),
+            KeyBinding::new("cmd-w", CloseMusicman, None),
+        ]);
+        cx.on_action(|_: &QuitMusicman, cx| cx.quit());
+        cx.on_action(|_: &CloseMusicman, cx| {
+            if let Some(window) = cx.active_window() {
+                let _ = window.update(cx, |_, w, _| w.remove_window());
+            }
+        });
+        cx.set_menus(vec![
+            Menu {
+                name: "Musicman".into(),
+                items: vec![MenuItem::action("Quit Musicman", QuitMusicman)],
+            },
+            Menu {
+                name: "File".into(),
+                items: vec![MenuItem::action("Close Window", CloseMusicman)],
+            },
+        ]);
         input::bind(cx);
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
