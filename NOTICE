@@ -1,6 +1,6 @@
 Musicman
 The text editing control in src/input.rs is adapted from the GPUI 0.2.2
-examples/input.rs example by Zed Industries and contributors, licensed under
+examples/input.rs example. Copyright 2022 - 2025 Zed Industries, Inc. Licensed under
 Apache License 2.0. Musicman modifies its styling, focus handling and bindings.
 GPUI project: https://github.com/zed-industries/zed/tree/main/crates/gpui
 
